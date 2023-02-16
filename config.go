@@ -17,7 +17,7 @@ type Config struct {
 	EnableFileServer bool             `json:"enable_file_server"`
 	FileServer       FileServerConfig `json:"file_server"`
 	LogRequests      bool             `json:"log_requests"`
-	LogDirectory     string           `json:"logs_directory"`
+	LogsDirectory    string           `json:"logs_directory"`
 }
 
 type NetworkConfig struct {
@@ -101,6 +101,17 @@ func NewServer(config *Config) (server *HTTPSServer, err error) {
 				StripPrefix(config.FileServer.URLPrefix),
 			),
 		)
+	}
+
+	if config.LogRequests {
+		if config.LogsDirectory == "" {
+			err = initError("logs directory not provided")
+			return
+		}
+		if exists, _ := util.DirectoryExists(config.LogsDirectory); !exists {
+			err = initError("directory not found: %s", config.LogsDirectory)
+			return
+		}
 	}
 
 	server = &HTTPSServer{
