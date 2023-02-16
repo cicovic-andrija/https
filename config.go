@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
+
+	"github.com/cicovic-andrija/go-util"
 )
 
 type Config struct {
@@ -61,7 +63,7 @@ func NewServer(config *Config) (server *HTTPSServer, err error) {
 		return
 	}
 
-	if exists, _ := Exists(config.Network.TLSCertPath); !exists {
+	if exists, _ := util.FileExists(config.Network.TLSCertPath); !exists {
 		err = initError("file not found: %s", config.Network.TLSCertPath)
 		return
 	}
@@ -71,7 +73,7 @@ func NewServer(config *Config) (server *HTTPSServer, err error) {
 		return
 	}
 
-	if exists, _ := Exists(config.Network.TLSKeyPath); !exists {
+	if exists, _ := util.FileExists(config.Network.TLSKeyPath); !exists {
 		err = initError("file not found: %s", config.Network.TLSKeyPath)
 		return
 	}
@@ -83,7 +85,7 @@ func NewServer(config *Config) (server *HTTPSServer, err error) {
 			err = initError("file server directory not provided")
 			return
 		}
-		if exists, _ := DirectoryExists(config.FileServer.Directory); !exists {
+		if exists, _ := util.DirectoryExists(config.FileServer.Directory); !exists {
 			err = initError("directory not found: %s", config.FileServer.Directory)
 			return
 		}
