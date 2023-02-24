@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"sync"
 
@@ -34,7 +35,7 @@ type FileServerConfig struct {
 
 func NewServer(config *Config) (server *HTTPSServer, err error) {
 	initError := func(format string, v ...interface{}) error {
-		return fmt.Errorf("https init: "+format, v...)
+		return fmt.Errorf("init: "+format, v...)
 	}
 
 	if config == nil {
@@ -103,13 +104,31 @@ func NewServer(config *Config) (server *HTTPSServer, err error) {
 		)
 	}
 
+	if config.LogsDirectory == "" {
+		err = initError("logs directory not provided")
+		return
+	}
+
+	if exists, _ := util.DirectoryExists(config.LogsDirectory); !exists {
+		err = initError("directory not found: %s", config.LogsDirectory)
+		return
+	}
+
+	var (
+		generalLog *util.FileLog = nil
+		requestLog *util.FileLog = nil
+	)
+
+	generalLog, err = util.NewFileLog(filepath.Join(config.LogsDirectory, "https.log"))
+	if err != nil {
+		err = initError("failed to create log file: %v", err)
+		return
+	}
+
 	if config.LogRequests {
-		if config.LogsDirectory == "" {
-			err = initError("logs directory not provided")
-			return
-		}
-		if exists, _ := util.DirectoryExists(config.LogsDirectory); !exists {
-			err = initError("directory not found: %s", config.LogsDirectory)
+		requestLog, err = util.NewFileLog(filepath.Join(config.LogsDirectory, "requests.https.log"))
+		if err != nil {
+			err = initError("failed to create requests log file: %v", err)
 			return
 		}
 	}
@@ -125,6 +144,8 @@ func NewServer(config *Config) (server *HTTPSServer, err error) {
 		tlsKeyPath:  config.Network.TLSKeyPath,
 		started:     false,
 		shutdownSem: &sync.WaitGroup{},
+		generalLog:  generalLog,
+		requestLog:  requestLog,
 	}
 
 	return
