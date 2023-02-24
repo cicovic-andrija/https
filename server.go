@@ -12,19 +12,24 @@ import (
 )
 
 type HTTPSServer struct {
-	httpsImpl   *http.Server
-	serveMux    *http.ServeMux
-	tlsCertPath string
-	tlsKeyPath  string
-	started     bool
-	startedAt   time.Time
-	shutdownSem *sync.WaitGroup
-	generalLog  *util.FileLog
-	requestLog  *util.FileLog
+	httpsImpl      *http.Server
+	serveMux       *http.ServeMux
+	commonAdapters []Adapter
+	tlsCertPath    string
+	tlsKeyPath     string
+	started        bool
+	startedAt      time.Time
+	shutdownSem    *sync.WaitGroup
+	generalLog     *util.FileLog
+	requestLog     *util.FileLog
 }
 
 func (s *HTTPSServer) Handle(pattern string, handler http.Handler) {
-	s.serveMux.Handle(pattern, handler)
+	s.serveMux.Handle(
+		pattern,
+		Adapt(handler, s.commonAdapters...),
+	)
+	s.log("handler registered for %s", pattern)
 }
 
 func (s *HTTPSServer) ListenAndServeAsync(errorChannel chan error) {
@@ -72,8 +77,16 @@ func (s *HTTPSServer) log(format string, v ...interface{}) {
 	s.generalLog.Output(util.SevInfo, 2, format, v...)
 }
 
+func (s *HTTPSServer) logRequest(format string, v ...interface{}) {
+	s.requestLog.Output(util.SevInfo, 2, format, v...)
+}
+
 func (s *HTTPSServer) logwarn(format string, v ...interface{}) {
 	s.generalLog.Output(util.SevWarn, 2, format, v...)
+}
+
+func (s *HTTPSServer) warnRequest(format string, v ...interface{}) {
+	s.requestLog.Output(util.SevWarn, 2, format, v...)
 }
 
 func (s *HTTPSServer) error(format string, v ...interface{}) error {

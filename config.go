@@ -79,8 +79,6 @@ func NewServer(config *Config) (server *HTTPSServer, err error) {
 		return
 	}
 
-	serveMux := http.NewServeMux()
-
 	if config.EnableFileServer {
 		if config.FileServer.Directory == "" {
 			err = initError("file server directory not provided")
@@ -94,14 +92,6 @@ func NewServer(config *Config) (server *HTTPSServer, err error) {
 			err = initError("file server URL prefix not provided")
 			return
 		}
-		fileServer := http.FileServer(http.Dir(config.FileServer.Directory))
-		serveMux.Handle(
-			config.FileServer.URLPrefix,
-			Adapt(
-				fileServer,
-				StripPrefix(config.FileServer.URLPrefix),
-			),
-		)
 	}
 
 	if config.LogsDirectory == "" {
@@ -133,19 +123,35 @@ func NewServer(config *Config) (server *HTTPSServer, err error) {
 		}
 	}
 
+	serveMux := http.NewServeMux()
+
 	server = &HTTPSServer{
 		httpsImpl: &http.Server{
 			Addr:     net.JoinHostPort(host, strconv.Itoa(config.Network.TCPPort)),
 			Handler:  serveMux,
 			ErrorLog: log.New(io.Discard, "", 0),
 		},
-		serveMux:    serveMux,
-		tlsCertPath: config.Network.TLSCertPath,
-		tlsKeyPath:  config.Network.TLSKeyPath,
-		started:     false,
-		shutdownSem: &sync.WaitGroup{},
-		generalLog:  generalLog,
-		requestLog:  requestLog,
+		serveMux:       serveMux,
+		commonAdapters: []Adapter{},
+		tlsCertPath:    config.Network.TLSCertPath,
+		tlsKeyPath:     config.Network.TLSKeyPath,
+		started:        false,
+		shutdownSem:    &sync.WaitGroup{},
+		generalLog:     generalLog,
+		requestLog:     requestLog,
+	}
+
+	if config.LogRequests {
+		server.commonAdapters = append(server.commonAdapters, server.LogRequest)
+	}
+
+	if config.EnableFileServer {
+		// Register file server.
+		fileServer := http.FileServer(http.Dir(config.FileServer.Directory))
+		server.Handle(
+			config.FileServer.URLPrefix,
+			Adapt(fileServer, StripPrefix(config.FileServer.URLPrefix)),
+		)
 	}
 
 	return
