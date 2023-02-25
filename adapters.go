@@ -7,6 +7,9 @@ import (
 	"strings"
 )
 
+// Path separator in URLs.
+const URLSeparator = "/"
+
 // Adapter is an HTTP(S) handler that invokes another HTTP(S) handler.
 type Adapter func(h http.Handler) http.Handler
 
@@ -27,13 +30,12 @@ func StripPrefix(prefix string) Adapter {
 	}
 }
 
-// RedirectToPathWithoutSlash is an adapter that redirects a request with
+// RedirectRootToParentTree is an adapter that redirects a request with
 // URL path /tree/ to /tree.
-func RedirectToPathWithoutSeparator(h http.Handler) http.Handler {
+func RedirectRootToParentTree(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		const Separator = "/"
-		if strings.HasSuffix(r.URL.Path, Separator) {
-			path := strings.TrimSuffix(r.URL.Path, Separator)
+		if strings.HasSuffix(r.URL.Path, URLSeparator) {
+			path := strings.TrimSuffix(r.URL.Path, URLSeparator)
 			u := &url.URL{Path: path, RawQuery: r.URL.RawQuery}
 			http.Redirect(w, r, u.String(), http.StatusMovedPermanently)
 			return
@@ -48,16 +50,36 @@ func RedirectToPathWithoutSeparator(h http.Handler) http.Handler {
 func (s *HTTPSServer) LogRequest(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.logRequest(
-			"accepted: %s %s %s referrer(%s) TLSv%s SNI(%s) ALPN(%s) cipher(%d)",
+			"accepted: %s # %s %s referrer(%s) TLSv%s SNI(%s) ALPN(%s) cipher(%d)",
+			r.RemoteAddr,
 			r.Method,
 			r.URL.String(),
-			r.RemoteAddr,
 			r.Referer(),
 			MapTLSVersion(r.TLS.Version),
 			r.TLS.ServerName,
 			r.TLS.NegotiatedProtocol,
 			r.TLS.CipherSuite,
 		)
+
+		// Call the next handler in the chain.
+		h.ServeHTTP(w, r)
+	})
+}
+
+// AllowOnlyGET blocks non-GET requests.
+func (s *HTTPSServer) AllowOnlyGET(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			s.warnRequest(
+				"blocked: %s # %s %s reason: restricted method",
+				r.RemoteAddr,
+				r.Method,
+				r.URL.String(),
+			)
+			w.Header().Set("Allow", "GET")
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
 
 		// Call the next handler in the chain.
 		h.ServeHTTP(w, r)

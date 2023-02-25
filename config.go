@@ -8,17 +8,19 @@ import (
 	"net/http"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/cicovic-andrija/go-util"
 )
 
 type Config struct {
-	Network          NetworkConfig    `json:"network"`
-	EnableFileServer bool             `json:"enable_file_server"`
-	FileServer       FileServerConfig `json:"file_server"`
-	LogRequests      bool             `json:"log_requests"`
-	LogsDirectory    string           `json:"logs_directory"`
+	Network              NetworkConfig    `json:"network"`
+	EnableFileServer     bool             `json:"enable_file_server"`
+	FileServer           FileServerConfig `json:"file_server"`
+	LogRequests          bool             `json:"log_requests"`
+	LogsDirectory        string           `json:"logs_directory"`
+	AllowOnlyGETRequests bool             `json:"allow_only_get_requests"`
 }
 
 type NetworkConfig struct {
@@ -141,6 +143,10 @@ func NewServer(config *Config) (server *HTTPSServer, err error) {
 		requestLog:     requestLog,
 	}
 
+	if config.AllowOnlyGETRequests {
+		server.commonAdapters = append(server.commonAdapters, server.AllowOnlyGET)
+	}
+
 	if config.LogRequests {
 		server.commonAdapters = append(server.commonAdapters, server.LogRequest)
 	}
@@ -148,10 +154,26 @@ func NewServer(config *Config) (server *HTTPSServer, err error) {
 	if config.EnableFileServer {
 		// Register file server.
 		fileServer := http.FileServer(http.Dir(config.FileServer.Directory))
-		server.Handle(
-			config.FileServer.URLPrefix,
-			Adapt(fileServer, StripPrefix(config.FileServer.URLPrefix)),
-		)
+		if strings.HasSuffix(config.FileServer.URLPrefix, URLSeparator) {
+			server.Handle(
+				config.FileServer.URLPrefix,
+				Adapt(
+					fileServer,
+					StripPrefix(config.FileServer.URLPrefix),
+					RedirectRootToParentTree,
+				),
+			)
+			server.Handle(
+				strings.TrimSuffix(config.FileServer.URLPrefix, URLSeparator),
+				http.HandlerFunc(http.NotFound),
+			)
+		} else {
+			server.Handle(
+				config.FileServer.URLPrefix,
+				Adapt(fileServer, StripPrefix(config.FileServer.URLPrefix)),
+			)
+		}
+
 	}
 
 	return

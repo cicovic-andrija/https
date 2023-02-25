@@ -81,10 +81,6 @@ func (s *HTTPSServer) logRequest(format string, v ...interface{}) {
 	s.requestLog.Output(util.SevInfo, 2, format, v...)
 }
 
-func (s *HTTPSServer) logwarn(format string, v ...interface{}) {
-	s.generalLog.Output(util.SevWarn, 2, format, v...)
-}
-
 func (s *HTTPSServer) warnRequest(format string, v ...interface{}) {
 	s.requestLog.Output(util.SevWarn, 2, format, v...)
 }
